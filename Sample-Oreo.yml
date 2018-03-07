@@ -1,0 +1,162 @@
+# ------------------------------------------------------------
+# --------------------事前説明--------------------------------- 
+# このサンプルを使用する際には､コンソールのリージョンを『東京』の変更
+# [KeyName: 'Your Name Key Change'] を自分のSSHキーに変更
+# セキュリティグループの[XXX.XXX.XXX.XXX/YYY]を任意の設定
+# YMAL なので半角スペースに気をつける事
+# 参考サイトは以下のURL
+# https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
+# ------------------------------------------------------------
+AWSTemplateFormatVersion: '2010-09-09'
+# この CloudFormation の説明
+Description: Test Oreo Template
+# 始まりの定義単語
+Resources:
+# ------------------------------------------------------------
+# VPCの設定
+  # -(ハイフン) は使用不可 英数字のみ
+  OreoVPC:
+    # Type の選択
+    Type: 'AWS::EC2::VPC'
+    # プロパティ
+    Properties:
+      # サブネットがカバーするCIDRブロック
+      CidrBlock: '10.0.0.0/16'
+      # タグ 『キー』/『値』
+      Tags:
+        - Key: 'Oreo-Key-Name'
+          Value: 'Oreo-Value-vpc'
+# ------------------------------------------------------------
+# リージョンの設定とパブリックの設定 # - (ハイフン) は使用不可 英数字のみ
+# ------------------------------------------------------------
+  OreoPublicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      # AZの指定
+      AvailabilityZone: 'ap-northeast-1a'
+      CidrBlock: '10.0.1.0/24'
+      # public IPの使用
+      MapPublicIpOnLaunch: true
+      # タグ 『キー』/『値』
+      Tags:
+        - Key: 'Oreo-Key-Name'
+          Value: 'Oreo-public-sub'
+      VpcId: !Ref OreoVPC
+# ------------------------------------------------------------
+# リージョンの設定とパブリックの設定 # - (ハイフン) は使用不可 英数字のみ
+# ------------------------------------------------------------
+  OreoInternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      # タグ 『キー』/『値』
+      Tags:
+        - Key: 'Oreo-Key-Name'
+          Value: 'Oreo-Value-igw'
+# ------------------------------------------------------------
+# VPCゲートウェイをアタッチ # - (ハイフン) は使用不可 英数字のみ
+# ------------------------------------------------------------
+  OreoIgwAttache:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: !Ref OreoInternetGateway
+      VpcId: !Ref OreoVPC
+# ------------------------------------------------------------
+# VPC内に新しいルートテーブルを作成 # - (ハイフン) は使用不可 英数字のみ
+# ------------------------------------------------------------
+  OreoPublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref OreoVPC
+      # タグ 『キー』/『値』
+      Tags:
+        - Key: 'Oreo-Key-Name'
+          Value: 'Oreo-Value-public-rtb'
+# ------------------------------------------------------------
+# VPC内のルートテーブルに対して新しいルートを作成 # - (ハイフン) は使用不可 英数字のみ
+# ------------------------------------------------------------
+  ChangePublicRouteTable:
+    Type: 'AWS::EC2::Route'
+    # OreoIgwAttache 実行後に設定
+    DependsOn: 'OreoIgwAttache'
+    Properties:
+      RouteTableId: !Ref OreoPublicRouteTable
+      # デフォルトゲートウェイ指定
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref OreoInternetGateway
+# ------------------------------------------------------------
+# サブネットをルートテーブルに関連付け # - (ハイフン) は使用不可 英数字のみ
+# ------------------------------------------------------------
+  SubnetPublicRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref OreoPublicRouteTable
+      SubnetId: !Ref OreoPublicSubnet
+# ------------------------------------------------------------
+# セキュリティグループの設定 # - (ハイフン) は使用不可 英数字のみ
+# ------------------------------------------------------------
+  OreoSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Your-Name-OreoSecurityGroup
+      VpcId: !Ref OreoVPC
+      # タグ 『キー』/『値』
+      Tags:
+        - Key: 'Oreo-Key-Name'
+          Value: 'Oreo-ValueSG'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: XXX.XXX.XXX.XXX/YYY
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: XXX.XXX.XXX.XXX/YYY
+# ------------------------------------------------------------
+# EC2 インスタンスの作成項目 # - (ハイフン) は使用不可 英数字のみ
+# ------------------------------------------------------------
+  OreoEC2Instance01:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      BlockDeviceMappings: 
+          - DeviceName: '/dev/sdm'
+            Ebs: 
+              VolumeType: 'gp2'
+              VolumeSize: '20'
+      # AMIのイメージ番号選択
+      ImageId: 'ami-c2680fa4' # 『Amazon Linux 2 LTS Candidate AMI 2017.12.0 (HVM), SSD Volume Type』
+      # インスタンスタイプ
+      InstanceType: 't2.micro'
+      # キーペア
+      KeyName: 'Your Name Key Change'
+      # 詳細モニタリング設定
+      Monitoring: false
+      # セキュリティグループ
+      SecurityGroupIds:
+        - !GetAtt OreoSecurityGroup.GroupId
+      # サブネット
+      SubnetId: !Ref OreoPublicSubnet
+      # テナンシー
+      Tenancy: 'default'
+      # シェルを書いてあげる事が可能
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum -y update
+          yum -y install httpd
+          systemctl start httpd
+          echo test-Oreo!!!!!! > /var/www/html/index.html
+      # タグ 『キー』/『値』
+      Tags:
+        - Key: 'Oreo-Key-Name'
+          Value: 'Oreo-Value01'
+# ------------------------------------------------------------
+# CloudFormation のコンソール上の『出力』に出力してくれる機能
+# ------------------------------------------------------------
+Outputs:
+  OreoEC2Instance01:
+    Value: !Ref OreoEC2Instance01
+  OreoSecurityGroup:
+    Value: !Ref OreoSecurityGroup
+  OreoVPC:
+    Value: !Ref OreoVPC
